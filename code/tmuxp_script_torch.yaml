@@ -1,0 +1,25 @@
+session_name: IAAtorch-kernel
+windows:
+- window_name: slurmout_iaatorch
+  layout: tiled
+  shell_command_before:
+    - cd "/om/user/daeda/ite_iaa/ite_gb_inverseappraisal/code/" || exit # run as a first command in all panes
+  panes:
+    - shell_command:        # pane no. 1
+      - env_iaa_cmdstan
+      - print "launchkernel_iaa_head()"
+    # launchkernel_iaa_tmux
+    # "tmuxp_script.yaml in code"
+    # "calls launchkernel_iaa() from ~/.functions"
+    # "    links current logfile in ~/.tmux_temp_/current_iaa_remotelog.txt"
+    # "    can be called with launchkernel_iaa_head() from ~/.functions"
+    # "calls sbatch launch_remote_kernel.sbatch in code"
+    # "    writes ../logs/jupyter-log-currenttunnel.txt"
+    # "    can be called with getssh_iaa() from ~/.functions"
+  
+    - shell_command:           # pane no. 2
+      - print "running >> launchkernel_iaa_torch_interactive() <<"
+      - launchkernel_iaa_torch_interactive
+
+
+

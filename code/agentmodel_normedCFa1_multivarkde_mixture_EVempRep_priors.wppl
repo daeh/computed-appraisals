@@ -1,0 +1,921 @@
+// Inferred Appraisals Agent Model
+// Authored by Sean Dae Houlihan
+
+// see https://agentmodels.org/chapters/3-agents-as-programs.html for background
+
+var paramin = (typeof argv !== 'undefined') ? JSON.parse(argv.param) : {
+	'pot': 4000,
+	'a1': ['C', 'D'],
+	'lambda': [2,2], // softmax optimality parameter [base, reputation]
+	'kde_width': 0.02,
+	'baseRefPointDist': 'Power',	
+	'baseRefPoint': { 'Money': {'scale': 5, 'a': 3, 'b': 2} },
+	'payoffMatrix': {'C': {'otherC': 0.5, 'otherD': 0}, 'D': {'otherC': 1, 'otherD': 0} }, //payoffWeakPD
+	'm0':           {'method': 'rejection', 'samples': 100 +0}, // base agent makes decision // pd of expectation of other agent's choice given base agent's decision
+	'm1':           {'method': 'rejection', 'samples': 100 +1}, // * infer base weights given base agent's decision (these are basis for level 3 & 4 reputation utilities)
+	'm2':           {'method': 'rejection', 'samples': 100 +2}, // reputation agent makes decision // pd of expectation of other agent's choice given reputation agent's decision
+	'm3':           {'method': 'rejection', 'samples': 100 +3}, // * infer weights of reputation agent's features
+	'm4':           {'method': 'rejection', 'samples': 100 +4}, // generate emotion predictions
+	'm4iaf':        {'method': 'rejection', 'samples': 100 +5}, // infer values of inverse appraisal features
+	'dataOut': '../dataout',
+	};
+
+var kde_data = (typeof argv !== 'undefined') ? json.read(paramin.path_to_kde) : {
+	"anongame": [[0.01020408163265306, 0.01020408163265306, 0.19387755102040816, 0.9166666666666666], [0.23469387755102042, 0.8061224489795918, 0.45918367346938777, 0.9166666666666666], [0.336734693877551, 0.5204081632653061, 0.5, 0.75], [0.336734693877551, 0.9897959183673469, 0.7040816326530612, 0.75], [0.3979591836734694, 0.2755102040816326, 0.5204081632653061, 0.5833333333333334], [0.3979591836734694, 0.5816326530612245, 0.3979591836734694, 0.75], [0.47959183673469385, 0.29591836734693877, 0.5, 0.9166666666666666], [0.47959183673469385, 0.9897959183673469, 0.5, 0.75], [0.5, 0.29591836734693877, 0.5, 0.75], [0.5, 0.5, 0.5204081632653061, 0.75], [0.5, 0.5, 0.5204081632653061, 0.25], [0.5, 0.826530612244898, 0.5, 0.75], [0.5, 0.8469387755102041, 0.8469387755102041, 0.75], [0.5, 0.8673469387755102, 0.8673469387755102, 0.5833333333333334], [0.5204081632653061, 0.826530612244898, 0.2755102040816326, 0.9166666666666666], [0.5612244897959183, 0.6836734693877551, 0.6428571428571429, 0.75], [0.5816326530612245, 0.336734693877551, 0.6020408163265306, 0.75], [0.6020408163265306, 0.41836734693877553, 0.6224489795918368, 0.5833333333333334], [0.6428571428571429, 0.37755102040816324, 0.7040816326530612, 0.4166666666666667], [0.6428571428571429, 0.47959183673469385, 0.5816326530612245, 0.5833333333333334], [0.6632653061224489, 0.5612244897959183, 0.4387755102040816, 0.75], [0.6632653061224489, 0.5612244897959183, 0.7244897959183674, 0.75], [0.7040816326530612, 0.6020408163265306, 0.7040816326530612, 0.75], [0.8061224489795918, 0.23469387755102042, 0.7857142857142857, 0.75]], 
+	"publicgame": [[0.01020408163265306, 0.01020408163265306, 0.19387755102040816, 0.01020408163265306, 0.5204081632653061, 0.030612244897959183, 0.9166666666666666], [0.23469387755102042, 0.8061224489795918, 0.45918367346938777, 0.9285714285714286, 0.8877551020408163, 0.09183673469387756, 0.9166666666666666], [0.336734693877551, 0.5204081632653061, 0.5, 0.5204081632653061, 0.5816326530612245, 0.5, 0.75], [0.336734693877551, 0.9897959183673469, 0.7040816326530612, 0.826530612244898, 0.9897959183673469, 0.21428571428571427, 0.75], [0.3979591836734694, 0.2755102040816326, 0.5204081632653061, 0.7244897959183674, 0.8061224489795918, 0.4387755102040816, 0.5833333333333334], [0.3979591836734694, 0.5816326530612245, 0.3979591836734694, 0.8877551020408163, 0.6836734693877551, 0.6632653061224489, 0.75], [0.47959183673469385, 0.29591836734693877, 0.5, 0.9897959183673469, 0.9897959183673469, 0.23469387755102042, 0.9166666666666666], [0.47959183673469385, 0.9897959183673469, 0.5, 0.9897959183673469, 0.9897959183673469, 0.19387755102040816, 0.75], [0.5, 0.29591836734693877, 0.5, 0.5612244897959183, 0.9489795918367347, 0.5204081632653061, 0.75], [0.5, 0.5, 0.5204081632653061, 0.5204081632653061, 0.5, 0.5204081632653061, 0.25], [0.5, 0.5, 0.5204081632653061, 0.5204081632653061, 0.5204081632653061, 0.5204081632653061, 0.75], [0.5, 0.826530612244898, 0.5, 0.9897959183673469, 0.9897959183673469, 0.5, 0.75], [0.5, 0.8469387755102041, 0.8469387755102041, 0.9897959183673469, 0.9897959183673469, 0.01020408163265306, 0.75], [0.5, 0.8673469387755102, 0.8673469387755102, 0.8469387755102041, 0.9897959183673469, 0.5, 0.5833333333333334], [0.5204081632653061, 0.826530612244898, 0.2755102040816326, 0.9897959183673469, 0.9897959183673469, 0.01020408163265306, 0.9166666666666666], [0.5612244897959183, 0.6836734693877551, 0.6428571428571429, 0.3163265306122449, 0.41836734693877553, 0.7653061224489796, 0.75], [0.5816326530612245, 0.336734693877551, 0.6020408163265306, 0.6020408163265306, 0.8061224489795918, 0.5816326530612245, 0.75], [0.6020408163265306, 0.41836734693877553, 0.6224489795918368, 0.3979591836734694, 0.9489795918367347, 0.5, 0.5833333333333334], [0.6428571428571429, 0.37755102040816324, 0.7040816326530612, 0.6632653061224489, 0.9897959183673469, 0.5204081632653061, 0.4166666666666667], [0.6428571428571429, 0.47959183673469385, 0.5816326530612245, 0.4387755102040816, 0.5612244897959183, 0.5, 0.5833333333333334], [0.6632653061224489, 0.5612244897959183, 0.4387755102040816, 0.8673469387755102, 0.6836734693877551, 0.35714285714285715, 0.75], [0.6632653061224489, 0.5612244897959183, 0.7244897959183674, 0.47959183673469385, 0.6632653061224489, 0.336734693877551, 0.75], [0.7040816326530612, 0.6020408163265306, 0.7040816326530612, 0.826530612244898, 0.826530612244898, 0.5612244897959183, 0.75], [0.8061224489795918, 0.23469387755102042, 0.7857142857142857, 0.25510204081632654, 0.5408163265306123, 0.5, 0.75]], 
+	"anongame_n": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], 
+	"publicgame_n": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], 
+	"anongame_labels": ["bMoney", "bAIA", "bDIA", "pi_a2_C"], 
+	"publicgame_labels": ["bMoney", "bAIA", "bDIA", "rMoney", "rAIA", "rDIA", "pi_a2_C"], 
+	"inferred_reputation_values_expectation": {
+		"C": {"Money": 0.5025510204081632, "AIA": 0.5578231292517007, "DIA": 0.5671768707482993}, 
+		"D": {"Money": 0.7841444270015696, "AIA": 0.2723704866562009, "DIA": 0.7621664050235479}}
+};
+
+// var kde_data = (typeof argv !== 'undefined') ? json.read(paramin.path_to_kde) : {
+// 	"anongame": [[0.01020408163265306, 0.01020408163265306, 0.01020408163265306, 0.9166666666666666], [0.01020408163265306, 0.01020408163265306, 0.01020408163265306, 0.75], [0.01020408163265306, 0.01020408163265306, 0.01020408163265306, 0.5833333333333334]], 
+// 	"publicgame": [[0.01020408163265306, 0.01020408163265306, 0.01020408163265306, 0.01020408163265306, 0.9897959183673469, 0.01020408163265306, 0.25], [0.01020408163265306, 0.01020408163265306, 0.01020408163265306, 0.01020408163265306, 0.9897959183673469, 0.35714285714285715, 0.25], [0.01020408163265306, 0.01020408163265306, 0.01020408163265306, 0.6632653061224489, 0.6836734693877551, 0.01020408163265306, 0.4166666666666667]], 
+// 	"anongame_n": [0.6, 1.2, 0.6], 
+// 	"publicgame_n": [0.6, 0.6, 0.6], 
+// 	"anongame_labels": ["bMoney", "bAIA", "bDIA", "pi_a2_C"], 
+// 	"publicgame_labels": ["bMoney", "bAIA", "bDIA", "rMoney", "rAIA", "rDIA", "pi_a2_C"], 
+// 	"inferred_reputation_values_expectation": {"C": {"Money": 0.5761086389442995, "AIA": 0.5284831977903943, "DIA": 0.5556237532607028}, "D": {"Money": 0.8189422977312752, "AIA": 0.23288096964674193, "DIA": 0.7130425774370662}}
+// };
+
+// _.extend(kde_data, {pia2C: map(function(x) {return (x*2 - 1)/12 }, kde_data.pia2_int)});
+
+
+var writeout = (typeof argv !== 'undefined') ? true : false;
+var outputDir = paramin.dataOut + '/';
+
+//// Global Variables ////
+
+var actions_player2 = ['otherC', 'otherD'];
+var actions_player1 = ['C', 'D'];
+var outcomeKeys = ['CC','CD','DC','DD']; // a1-a2, this-other
+var pot = paramin.pot;
+var softmaxFactor = paramin.lambda; //// softmax optimality parameter
+var kde_width = paramin.kde_width;
+var pia2_spread = [0.7, 0.2, 0.05, 0.025, 0.02, 0.005];
+
+display('pot:  $' + pot);
+display(paramin);
+display('\n');
+
+
+//// Utility Functions ////
+
+globalStore.numerical_errors = 0;
+var checkForNaN = function(x) { 
+	if (typeof x !== 'number' || x-1 === x || Number.isNaN(x)) { 
+		globalStore.numerical_errors = globalStore.numerical_errors + 1;
+		display('E' + 'rror NaN found: [' + x + ']'); 
+		return; 
+	} else { 
+		return x; 
+	} 
+};
+
+// var getLinearValue = function(point1, point2, x) { return ((point1.x - point2.x)/(point1.y - point2.y))*(x - point1.x) + point1.y; };
+var elementwiseProduct = function(vec1, vec2) { return map2(function(x, y) {return checkForNaN(x * y)}, vec1, vec2) };
+var vectorScale = function(vec, c) { return map(function(v) { return checkForNaN(v * c); }, vec); };
+
+// PS no transform //
+// var prospectScale = function(U) { return checkForNaN(U); };
+// var inverseProspectScale = function(V) { return checkForNaN(V); };
+
+// PS Power function //
+// var prospectScale = function(U) { return (U >= 0) ? Math.pow(checkForNaN(U), paramin.prospect_alpha) : -1*paramin.prospect_lambda*Math.pow(checkForNaN(-1*U), paramin.prospect_beta); }; /////////// T&K 1992 http://cemi.ehess.fr/docannexe/file/2780/tversjy_kahneman_advances.pdf
+// var inverseProspectScale = function(V) { return (V >= 0) ? Math.pow(checkForNaN(V), 1/paramin.prospect_alpha) : -1*Math.pow(checkForNaN(-1*V/paramin.prospect_lambda), 1/paramin.prospect_beta); };
+
+// PS Log function //
+var prospectScale = function(U) { return checkForNaN(Math.sign(U) * Math.log1p(Math.abs(checkForNaN(U)))); }; 
+var inverseProspectScale = function(V) { return Math.sign(V) * Math.exp( Math.abs(V) ) - 1; }; 
+
+var prospectRefFrame = function(ref, x) { return checkForNaN(prospectScale(x - ref)); };
+
+var payoffMatrix = function(thisDec,otherDec) { return paramin.payoffMatrix[thisDec][otherDec]; }; //payoffGeneral
+
+
+// var elementwiseDifference = function(actual, expected) {return map2(function(a,e) {return checkForNaN(a) - checkForNaN(e);}, actual,expected); };
+var elementwiseDifference_linspace = function(actual, expected) {return map2(function(a, e) {return checkForNaN(inverseProspectScale(a)) - checkForNaN(inverseProspectScale(e));}, actual,expected); };
+
+// var stretch = function(x) { return 0.5*(x-paramin.transformationParam.b)/(0.5-paramin.transformationParam.b) };
+// var logistic = function(x) { return 1/(1 + paramin.transformationParam.Q*Math.exp(-paramin.transformationParam.B*x)); };
+// var tanh = function(x) { return (Math.exp(x) - Math.exp(-1*x))/(Math.exp(x) + Math.exp(-1*x)); }; // tanh sigmoid
+// var transformation = function(x) { return x; }; // function(x) { return stretch( logistic(x) ); }; // function(x) { return stretch( logistic(x) ); };
+// var scaleIAF = function(v,param) { if (v.length != param.beta.length) {display(v); display(param.beta); display('E' + 'rror Beta size does not match'); return;} else {return sum( map(function(elem){ return elem + param.mu; }, map2(elementwiseProduct, v, param.beta) ) ); } };
+
+
+//// Distributions ////
+
+var normalize_probs = function(probs_array) {
+	// previously used this, but it is numerically unstable:
+	// map2(elementwiseProduct, prob_not_a1_unnormalized, map(function(){return 1/sum(prob_not_a1_unnormalized);}, prob_not_a1_unnormalized));
+	var p_sum = checkForNaN(Math.max(sum(probs_array), Number.MIN_VALUE));
+	return map(function(p){return Math.min(Math.max(checkForNaN(checkForNaN(p)/p_sum), Number.MIN_VALUE), Number.MAX_VALUE);}, probs_array);
+};
+
+var constrain = function(x) { return Math.min(Math.max(checkForNaN(x), 0.0), 1.0); };
+var OrthogonalSampleNoise = function (mu, sigma) { return constrain( mu + (sigma * sample(Gaussian({mu: 0.0, sigma: 1.0}))) ); };
+var OrthogonalSampleNoise_bypass = function (mu, sigma) {return mu;};
+var addOrthogonalSampleNoise = kde_width > 0 ? OrthogonalSampleNoise : OrthogonalSampleNoise_bypass;
+
+// var constrainPia2 = function(x) { return Math.min(Math.max(x, 1/12), 11/12) };
+var SampleNoisePia2 = function (mu, spread) { 
+	var sign = flip() ? 1.0 : -1.0;
+	var noise = sign * sample(Categorical({ps: spread, vs: [0.0, 2/12, 4/12, 6/12, 8/12, 10/12]}));
+	return constrain(mu + noise);
+};
+var SampleNoisePia2_bypass = function (mu, spread) {return mu;};
+var addSampleNoisePia2 = kde_width > 0 ? SampleNoisePia2 : SampleNoisePia2_bypass;
+
+var simulate_a2 = function(prob) {
+	return sample( Bernoulli({p: prob}) ) ? actions_player2[0] : actions_player2[1];
+};
+var sample_prefs_idx_base = function() {
+	return sample(Discrete({ps: kde_data.anongame_n}));
+}
+var sample_prefs_idx_repu = function() {
+	return sample(Discrete({ps: kde_data.publicgame_n}));
+}
+
+var genericWeightScalerFunction = function(value) { return prospectScale( value ); };
+var genericWeightScalerFunctionReputation = function(value) { return prospectScale( value ); }; 
+
+var get_inferred_reputation_loading = function() {
+	return {
+		'C': [
+			kde_data.inferred_reputation_values_expectation.C.Money,
+			kde_data.inferred_reputation_values_expectation.C.AIA,
+			kde_data.inferred_reputation_values_expectation.C.DIA,
+		], 
+		'D': [
+			kde_data.inferred_reputation_values_expectation.D.Money,
+			kde_data.inferred_reputation_values_expectation.D.AIA,
+			kde_data.inferred_reputation_values_expectation.D.DIA,
+		]};
+};
+
+var inferred_reputation_prior_ = map2(function(x,y){ return checkForNaN(constrain(0.5*(checkForNaN(x)+checkForNaN(y)))); }, 
+	[
+		kde_data.inferred_reputation_values_expectation.C.Money,
+		kde_data.inferred_reputation_values_expectation.C.AIA,
+		kde_data.inferred_reputation_values_expectation.C.DIA,
+	],
+	[
+		kde_data.inferred_reputation_values_expectation.D.Money,
+		kde_data.inferred_reputation_values_expectation.D.AIA,
+		kde_data.inferred_reputation_values_expectation.D.DIA,
+	]);
+var get_inferred_reputation_loading_priors = function() {
+	return {
+		'C': inferred_reputation_prior_, 
+		'D': inferred_reputation_prior_};
+};
+
+//// Features ////
+
+var psRefMoney = function(dist_type, dist_param) {
+	if (dist_type == 'Power') {
+		return Math.pow(10, dist_param.scale * sample(Beta({a: dist_param.a, b: dist_param.b})));
+	} else if (dist_type == 'Norm') {
+		return Math.abs(sample(Gaussian(dist_param)));
+	} else if (dist_type == 'Gamma') {
+		return Math.abs(sample(Gamma(dist_param)));
+	} else if (dist_type == 'None') {
+		return 0.0;
+	}
+};
+
+var Money = {
+	label: "Money",
+	loadingBase: function(thisDecision) {
+		return (thisDecision === 'C') ? paramin.payoffMatrix.C : paramin.payoffMatrix.D; //payoffGeneral
+	},
+
+	sampleReferencePoint: function () { return psRefMoney(paramin.baseRefPointDist, paramin.baseRefPoint.Money); },
+
+	loadingReputation: function(expectedReputation) {
+		return  -1 * expectedReputation;
+	}
+};
+
+var AIA = {
+	// Advantageous Inequity Aversion
+	label: "AIA",
+	loadingBase: function(thisDecision) {
+		return (thisDecision === 'C') ?
+		{ otherC: -Math.max(paramin.payoffMatrix.C.otherC - paramin.payoffMatrix.C.otherC, 0),
+			otherD: -Math.max(paramin.payoffMatrix.C.otherD - paramin.payoffMatrix.D.otherC, 0), } :
+		{ otherC: -Math.max(paramin.payoffMatrix.D.otherC - paramin.payoffMatrix.C.otherD, 0),
+			otherD: -Math.max(paramin.payoffMatrix.D.otherD - paramin.payoffMatrix.D.otherD, 0) }; //payoffGeneral
+	},
+
+	sampleReferencePoint: function() { return 0.0; },
+
+	loadingReputation: function(expectedReputation) {
+		return 1 * expectedReputation;
+	}
+};
+
+var DIA = {
+	// Disadvantageous Inequity Aversion
+	label: "DIA",
+	loadingBase: function(thisDecision) {
+		return (thisDecision === 'C') ?
+		{ otherC: -Math.max(paramin.payoffMatrix.C.otherC - paramin.payoffMatrix.C.otherC, 0),
+			otherD: -Math.max(paramin.payoffMatrix.D.otherC - paramin.payoffMatrix.C.otherD, 0), } :
+		{ otherC: -Math.max(paramin.payoffMatrix.C.otherD - paramin.payoffMatrix.D.otherC, 0),
+			otherD: -Math.max(paramin.payoffMatrix.D.otherD - paramin.payoffMatrix.D.otherD, 0) }; //payoffGeneral
+	},
+
+	sampleReferencePoint: function() { return 0.0; },
+
+	loadingReputation: function(expectedReputation) {
+		return 1 * expectedReputation;
+	}
+};
+
+
+var featuresBaseExclusive = [];
+var featuresRepuOverlapping = [Money, AIA, DIA]; //[Money, DIA, AIA, Power];
+var featuresRepuExclusive = [];
+
+var baseSlice = [0, featuresBaseExclusive.length + featuresRepuOverlapping.length];
+var repuSlice = [baseSlice[1], baseSlice[1] + featuresRepuOverlapping.length + featuresRepuExclusive.length];
+display('baseSlice: '+ baseSlice);
+display('repuSlice: '+ repuSlice);
+
+var recastIAF = function(a) {
+	return _.fromPairs(mapIndexed( function(fidx,f) {
+		return [f.label, {
+			//// subjective values ////
+			b: {
+				EU: inverseProspectScale(a.subjectiveUtilsExpected[fidx]),
+				U: inverseProspectScale(a.subjectiveUtilsReal[fidx]),
+				PE: elementwiseDifference_linspace(a.subjectiveUtilsReal, a.subjectiveUtilsExpected)[fidx],
+				CFa2: elementwiseDifference_linspace(a.subjectiveCF_a2, a.subjectiveUtilsReal)[fidx],
+				CFa1: elementwiseDifference_linspace(a.subjectiveCF_a1, a.subjectiveUtilsReal)[fidx],
+				CFa2_raw: inverseProspectScale(a.subjectiveCF_a2[fidx]), // counterfactual a2
+				CFa1_raw: inverseProspectScale(a.subjectiveCF_a1[fidx]), // counterfactual a1
+				},
+			r: {
+				U: inverseProspectScale(a.subjectiveUtilsExpected[fidx+repuSlice[0]]),
+				CFa1: elementwiseDifference_linspace(a.subjectiveCF_a1, a.subjectiveUtilsExpected)[fidx+repuSlice[0]],
+				CFa1_raw: inverseProspectScale(a.subjectiveCF_a1[fidx+repuSlice[0]]), // counterfactual a1
+				},
+
+			//// objective values ////
+			objective_b: {
+				EU: inverseProspectScale(a.absoluteUtilsProspectExpected[fidx]),
+				U: inverseProspectScale(a.absoluteUtilsProspectReal[fidx]),
+				PE: elementwiseDifference_linspace(a.absoluteUtilsProspectReal, a.absoluteUtilsProspectExpected)[fidx],
+				CFa2: elementwiseDifference_linspace(a.absoluteCF_a2, a.absoluteUtilsProspectReal)[fidx],
+				CFa1: elementwiseDifference_linspace(a.absoluteCF_a1, a.absoluteUtilsProspectReal)[fidx],
+				CFa2_raw: inverseProspectScale(a.absoluteCF_a2[fidx]), // counterfactual a2
+				CFa1_raw: inverseProspectScale(a.absoluteCF_a1[fidx]), // counterfactual a1
+			},
+			objective_r: {
+				U: inverseProspectScale(a.absoluteUtilsProspectExpected[fidx+repuSlice[0]]),
+				CFa1: elementwiseDifference_linspace(a.absoluteCF_a1, a.absoluteUtilsProspectExpected)[fidx+repuSlice[0]],
+				CFa1_raw: inverseProspectScale(a.absoluteCF_a1[fidx+repuSlice[0]]), // counterfactual a1
+			},
+
+			// //// other player's inferred values ////
+			// other_b: {
+			// 	EU: inverseProspectScale(a.otherMotivation[fidx])
+			// 	},
+			// other_r: {
+			// 	U: inverseProspectScale(a.otherMotivation[fidx+repuSlice[0]])
+			// 	},
+
+		}];
+	}, featuresRepuOverlapping));
+};
+
+
+//// Appraisal Features ////
+
+var showAppraisalFeature = function(feature) {
+	var flabel = feature.label;
+	var weighting = ['', 'objective_'];
+	return _.flatten(map(function(subobj){
+		return [
+			{ label: subobj + "EU[" + "base" + feature.label + "]", //_absoluteBaseExpected",
+				predict: function(iaf,label) { return iaf[flabel][subobj+'b'].EU; } }, // the base-utility I expected
+			{ label: subobj + "U[" + "base" + feature.label + "]", //"_absoluteBaseReal",
+				predict: function(iaf,label) { return iaf[flabel][subobj+'b'].U; } }, // the base-utility I achieved
+			{ label: subobj + "PE[" + "base" + feature.label + "]", //"_absoluteBasePE",
+				predict: function(iaf,label) { return iaf[flabel][subobj+'b'].PE; } }, // the base-utility I expected vs achieved
+
+			{ label: subobj + "CFa2[" + "base" + feature.label + "]", //"",
+				predict: function(iaf,label) { return iaf[flabel][subobj+'b'].CFa2; } }, // the base-utility I would have achieved if the other player had made the other choice
+			{ label: subobj + "CFa1[" + "base" + feature.label + "]", //"",
+				predict: function(iaf,label) { return iaf[flabel][subobj+'b'].CFa1; } }, // the base-utility I would have achieved if I had made the other choice
+			//
+			{ label: subobj + "rawCFa2[" + "base" + feature.label + "]", //"",
+				predict: function(iaf,label) { return iaf[flabel][subobj+'b'].CFa2_raw ; } }, // the utility I achieved vs what I would have got if the other player had made the other choice
+			{ label: subobj + "rawCFa1[" + "base" + feature.label + "]", //"",
+				predict: function(iaf,label) { return iaf[flabel][subobj+'b'].CFa1_raw; } }, // the utility I achieved vs what I would have got if I had made the other choice
+
+			{ label: subobj + "U[" + "repu" + feature.label + "]", //_absoluteBaseExpected",
+				predict: function(iaf,label) { return iaf[flabel][subobj+'r'].U; } }, // the reputation-utility I expected & think I achieved
+
+			{ label: subobj + "CFa1[" + "repu" + feature.label + "]", //"",
+				predict: function(iaf,label) { return iaf[flabel][subobj+'r'].CFa1; } }, // the reputation-utility I would have achieved if I had made the other choice
+			//
+			{ label: subobj + "rawCFa1[" + "repu" + feature.label + "]", //"",
+				predict: function(iaf,label) { return iaf[flabel][subobj+'r'].CFa1_raw; } }, // the reputation-utility I expected & think I achieved vs the reputation I would have got if I had made the other choice
+		];
+	},weighting));
+};
+
+var outcomeFeatures = _.flattenDeep([map(showAppraisalFeature, _.flatten([featuresBaseExclusive, featuresRepuOverlapping, featuresRepuExclusive])),[{ label: "PEa2lnpot", predict: function(iaf,label) { return iaf.otherDecisionPElnpot; } }, { label: "PEa2pot", predict: function(iaf,label) { return iaf.otherDecisionPEpot; } }, { label: "PEa2raw", predict: function(iaf,label) { return iaf.otherDecisionPEraw; } }, { label: "PEa2unval", predict: function(iaf,label) { return iaf.otherDecisionPEunval; } }]]);
+
+//// End of model features ////
+
+var featuresBase = _.flatten([featuresRepuOverlapping, featuresBaseExclusive]); // Overlapping features must be indexed before exclusive base features
+
+
+var combinedPreferencelabels = [
+	map(function(feature) {return 'b' + feature.label;}, featuresBase),
+	map(function(feature) {return 'r' + feature.label;}, _.flatten([featuresRepuOverlapping, featuresRepuExclusive]))
+];
+var combinedFeaturelabels = [
+	map(function(feature) {return 'b' + feature.label;}, featuresBase),
+	map(function(feature) {return 'r' + feature.label;}, _.flatten([featuresRepuOverlapping, featuresRepuExclusive])),
+	['pi_a2'],
+];
+
+display(
+	mapIndexed(function(idx, feature) { return ['(c' + idx + ')' + feature];}, _.flatten(
+		mapIndexed(function(idx, feature) { return ['(b' + idx + ')' + feature.label];}, featuresBase),
+		mapIndexed(function(idx, feature) { return ['(r' + idx + ')' + feature.label];}, _.flatten([featuresRepuOverlapping, featuresRepuExclusive]))
+		))
+	);
+
+var outcomeFeaturesLabels = map(function(feature) {return feature.label;}, outcomeFeatures);
+
+if (writeout) {
+	json.write(outputDir + 'paramin.json', _.omit(paramin, 'pot'));
+	json.write(outputDir + 'featureLabels.json', combinedFeaturelabels);
+	json.write(outputDir + 'outcomeFeatureLabels.json', outcomeFeaturesLabels);
+}
+
+
+////////// Generate Agents //////////
+
+var generateBaseAgent = function() {
+	// world is pot size, state is baseWeights
+	var prefWeightsIndex = sample_prefs_idx_base();
+	var sampled_resp_vec = kde_data.anongame[prefWeightsIndex];
+
+	var baseWeights_sampled = [sampled_resp_vec[0], sampled_resp_vec[1], sampled_resp_vec[2]];
+	var pia2c_sampled = sampled_resp_vec[sampled_resp_vec.length-1];
+
+	var baseWeights = map(function(weight) {return addOrthogonalSampleNoise(weight, kde_width);}, baseWeights_sampled);
+	var p1_estimatedProb_of_p2_cooperate = addSampleNoisePia2(pia2c_sampled, pia2_spread);
+
+	var baseReferencePointsUnscaled = map(function(feature) {
+		var sampleReferenceFn = feature.sampleReferencePoint;
+		return sampleReferenceFn();
+	}, featuresBase);
+
+	return { 
+		prefWeightsIndex: prefWeightsIndex,
+		baseWeights: baseWeights,
+		baseReferencePointsUnscaled: baseReferencePointsUnscaled,
+		p1_estimatedProb_of_p2_cooperate: p1_estimatedProb_of_p2_cooperate,
+		// prospectFunction: prospectScale,
+	};
+};
+
+var generateReputationAgent = function() {
+	
+	var prefWeightsIndex = sample_prefs_idx_repu();
+	var sampled_resp_vec = kde_data.publicgame[prefWeightsIndex];
+
+	var prefWeights_sampled = [sampled_resp_vec[0], sampled_resp_vec[1], sampled_resp_vec[2], sampled_resp_vec[3], sampled_resp_vec[4], sampled_resp_vec[5]];
+	var pia2c_sampled = sampled_resp_vec[sampled_resp_vec.length-1];
+
+	var prefWeightsComposit = map(function(weight) {return addOrthogonalSampleNoise(weight, kde_width);}, prefWeights_sampled);
+	var p1_estimatedProb_of_p2_cooperate = addSampleNoisePia2(pia2c_sampled, pia2_spread);
+
+	var baseReferencePointsUnscaled = map(function(feature) {
+		var sampleReferenceFn = feature.sampleReferencePoint;
+		return sampleReferenceFn();
+	}, featuresBase);
+
+	return { 
+		prefWeightsIndex: prefWeightsIndex,
+		compositeWeights: prefWeightsComposit,
+		baseReferencePointsUnscaled: baseReferencePointsUnscaled,
+		p1_estimatedProb_of_p2_cooperate: p1_estimatedProb_of_p2_cooperate,
+		// prospectFunction: prospectScale,
+		inferredReputationValues: get_inferred_reputation_loading(),
+	};
+};
+var generateReputationAgent_priors = function() {
+	
+	var prefWeightsIndex = sample_prefs_idx_repu();
+	var sampled_resp_vec = kde_data.publicgame[prefWeightsIndex];
+
+	var prefWeights_sampled = [sampled_resp_vec[0], sampled_resp_vec[1], sampled_resp_vec[2], sampled_resp_vec[3], sampled_resp_vec[4], sampled_resp_vec[5]];
+	var pia2c_sampled = sampled_resp_vec[sampled_resp_vec.length-1];
+
+	var prefWeightsComposit = map(function(weight) {return addOrthogonalSampleNoise(weight, kde_width);}, prefWeights_sampled);
+	var p1_estimatedProb_of_p2_cooperate = addSampleNoisePia2(pia2c_sampled, pia2_spread);
+
+	var baseReferencePointsUnscaled = map(function(feature) {
+		var sampleReferenceFn = feature.sampleReferencePoint;
+		return sampleReferenceFn();
+	}, featuresBase);
+
+	return { 
+		prefWeightsIndex: prefWeightsIndex,
+		compositeWeights: prefWeightsComposit,
+		baseReferencePointsUnscaled: baseReferencePointsUnscaled,
+		p1_estimatedProb_of_p2_cooperate: p1_estimatedProb_of_p2_cooperate,
+		// prospectFunction: prospectScale,
+		inferredReputationValues: get_inferred_reputation_loading_priors(),
+	};
+};
+
+//// Model ////
+
+var get_psychLoadings_baseonly = function(thisDecision, otherDecision) {
+	// return objective utility
+	return map(function(feature) {
+		var psychFeature = feature.loadingBase; // \theta
+		var psychFeature_a1 = psychFeature(thisDecision); // \theta(a_1)
+		var psychFeature_a1a2 = psychFeature_a1[otherDecision]; // \theta(a_1,a_2)
+		return psychFeature_a1a2;
+	}, featuresBase);
+};
+
+var get_psychLoadings_repuonly = function(inferredReputationValues, thisDecision) {
+	var expectedReputation_given_thisDecision = map(checkForNaN, inferredReputationValues[thisDecision]);
+	return map2(function(feature, expectedRepu) {
+		var psychFeature = feature.loadingReputation;
+		psychFeature(expectedRepu)
+	}, featuresRepuOverlapping, expectedReputation_given_thisDecision);
+};
+
+var expectedUtilityDist_base = function(agent, thisDecision) {
+	return Infer({ method: 'enumerate', model() {
+		var otherDecision = simulate_a2(agent.p1_estimatedProb_of_p2_cooperate); // a_2
+
+		var psychLoadings_base = get_psychLoadings_baseonly(thisDecision, otherDecision); 
+
+		var values_base = vectorScale(psychLoadings_base, pot); // \theta(a1,a2) * pot )
+
+		var prospectValues_base = map2(prospectRefFrame, agent.baseReferencePointsUnscaled, values_base); // \nu ( theta * pot - theta_0)
+
+		var subjectiveUtilities = elementwiseProduct(agent.baseWeights, prospectValues_base); // [ \omega_i * ln(\theta_i(a_1,a_2)*pot + 1), ... ] 
+
+		return sum(subjectiveUtilities); // sum{ [ \omega_i * ln(\theta_i(a_1,a_2)*pot + 1), ... ] }
+	}});
+};
+
+var softmaxDist_BaseAgent = function(agent) {
+
+	return Infer({ method: 'enumerate', model() {
+
+			var thisDecision = uniformDraw(actions_player1);
+
+			var expectedUtility = expectation(expectedUtilityDist_base(agent, thisDecision));
+
+			factor(softmaxFactor[0] * expectedUtility); // softmax: adds x to the unnormaled lp such that P(a_1) \propto exp( \lambda_b * EU_b[a_1] ), where the EU has been prospect transformed
+
+			return thisDecision;
+		}
+	});
+};
+
+
+var get_prospectValueRepu = function(agent, thisDecision, otherDecision) {
+		// Takes in all BASE features, i.e. [featuresRepuOverlapping, featuresBaseExclusive]
+		var psychLoadings_base = get_psychLoadings_baseonly(thisDecision, otherDecision); 
+		var values_base = vectorScale(psychLoadings_base, pot);
+		var prospectValues_base = map2(prospectRefFrame, agent.baseReferencePointsUnscaled, values_base);
+		
+		var psychLoadings_repu = get_psychLoadings_repuonly(agent.inferredReputationValues, thisDecision);
+		var values_repu = vectorScale(psychLoadings_repu, pot);
+		var prospectValues_repu = map(genericWeightScalerFunctionReputation, values_repu);
+		
+		return _.flatten([prospectValues_base, prospectValues_repu]);
+};
+var get_expected_prospectValueRepu_dist = function(agent, thisDecision) {
+
+	Infer({method: 'enumerate', model() {
+
+			var otherDecision = simulate_a2(agent.p1_estimatedProb_of_p2_cooperate);
+
+			return get_prospectValueRepu(agent, thisDecision, otherDecision);
+		}
+	});
+};
+
+var expectedUtilityDist_repu = function(agent, thisDecision) {
+
+	return Infer({method: 'enumerate', model() {
+
+		var otherDecision = simulate_a2(agent.p1_estimatedProb_of_p2_cooperate);
+
+		var subjectiveUtilities = elementwiseProduct(agent.compositeWeights, get_prospectValueRepu(agent, thisDecision, otherDecision))
+
+		return sum(subjectiveUtilities);
+
+	}});
+};
+
+var softmaxDist_ReputationAgent = function(agent) {
+
+	return Infer({ method: 'enumerate', model() {
+
+			var thisDecision = uniformDraw(actions_player1);
+
+			var expectedUtility = expectation(expectedUtilityDist_repu(agent, thisDecision));
+
+			factor(softmaxFactor[1] * expectedUtility); // softmax: adds x to the unnormaled lp such that P(a_1) \propto exp( \lambda_r * EU_{b+r}[a_1] ), where the EU has been prospect transformed
+
+			return thisDecision;
+		}
+	});
+};
+
+
+
+
+
+////////// Observe Agents //////////
+
+var observeBaseAgent = function() {
+	var agent = generateBaseAgent();
+	return _.extend(agent, { distra: softmaxDist_BaseAgent(agent) });
+};
+
+var observeReputationAgent = function() {
+	var agent = generateReputationAgent();
+	return _.extend(agent, { distra: softmaxDist_ReputationAgent(agent) });
+};
+
+var observeReputationAgent_priors = function() {
+	var agent = generateReputationAgent_priors();
+	return _.extend(agent, { distra: softmaxDist_ReputationAgent(agent) });
+};
+
+////////// Observe Models //////////
+var score_m1 = [];
+var observeLevel0model = function(thisDecision) {
+	//// Infers the weights on the base model (private decision)
+	Infer(paramin.m1, function() {
+
+		var agent = observeBaseAgent();
+
+		observe(agent.distra, thisDecision);
+		score_m1.push(agent.distra.score(thisDecision));
+
+		/*
+		if ( agent.distra.score(thisDecision) == 0) {
+			display('Decision: ' + thisDecision);
+			display(agent.baseWeights);
+			display(agent.distra);
+			display('');}
+			*/
+
+		return {weights: agent.baseWeights, estimated_p2: agent.p1_estimatedProb_of_p2_cooperate};
+	});
+};
+
+var score_m3 = [];
+var observeLevel2model = function(thisDecision) {
+	//// Infers the weights on the level 2 model (public decision)
+	Infer(paramin.m3, function() {
+		var agent = observeReputationAgent();
+
+		observe(agent.distra, thisDecision);  // returns distribution over decisions given
+		score_m3.push(agent.distra.score(thisDecision));
+
+		return {weights: agent.compositeWeights, estimated_p2: agent.p1_estimatedProb_of_p2_cooperate}; //// , prefWeightsIndex: agent.prefWeightsIndex
+	});
+};
+
+var forwardSampleAppraisalFeature = function(emotion, agentValues) {
+	//// Calculates the emotion intensity and then samples from the emotion distribution
+
+	var predictionFunction = emotion.predict;
+	var intensityPrediction = predictionFunction(agentValues, emotion.label);
+
+	return intensityPrediction;
+};
+
+/**
+subjectiveUtility = omega_i * \nu( ( theta_i(a1, a2) * pot - refpoint_i) )
+prospectValue <-- \nu( ( theta_i(a1, a2) * pot - refpoint_i) )
+value <--  * pot
+psychLoading = theta_i(a1, a2) /// returned signed value
+ * **/
+
+var score_m4 = [];
+var observeLevel2model_Emotions = function(method4, thisDecision, otherDecision, emotions, emotionFun, sigmoidFun) {
+	//// ***********
+
+	Infer(method4, function() {
+		var planning_agent = observeReputationAgent();
+
+		observe(planning_agent.distra, thisDecision);  // returns distribution over decision given
+		score_m4.push(planning_agent.distra.score(thisDecision));
+
+		//// ignore the inverse inference ////
+		/// CRITICAL - make sure that the independently sampled agent isn't included in the score ///
+		var agent = observeReputationAgent_priors(); /// independently sampled agent
+
+		//////////////
+		//// calculate expected utilities for each feature given this decision (enumerating over otherDecision) ////
+		//////////////
+
+		var expected_prospectValue_dists = get_expected_prospectValueRepu_dist(agent, thisDecision); //// utilities associated with each b+r feature
+
+		var dists = expected_prospectValue_dists.params.dist;
+		var keys = Object.keys(dists);
+
+		var getDistValues = function(distsampleval) { return _.flatten( map(function(ival) { return ival; }, distsampleval) ); };
+
+		//// pairs for thisDecision : [[[vector of utilities for otherDecision1],[probability of otherDecision1]],[[vector of utilities for otherDecision2],[probability of otherDecision2]]] ////
+		var pairs = map(function(key) {return [getDistValues(dists[key].val), dists[key].prob];}, keys);
+
+		var weightedpairs = map(function(o) { return vectorScale(o[0], o[1]); }, pairs); //// multiplies every utility in vector o[0] by assocaited probability, o[1]
+
+		var expected_prospectValues = map(function(idx) {
+			return sum(map(function(value) { return value[idx]; }, weightedpairs));
+		}, _.range(weightedpairs[0].length) ); /// sum columns to get expected utility for each feature (integrating across otherDecision)
+
+		var expected_subjectiveUtilities = elementwiseProduct(agent.compositeWeights, expected_prospectValues); /// weight expected utility vector by agent's preferences
+
+		//////////////
+		//// calculate actual (realized) utilities for each feature given this player's decision (a1) and other player's decision (a2) ////
+		//////////////
+
+		var achieved_prospectValues = get_prospectValueRepu(agent, thisDecision, otherDecision);
+
+		var achieved_subjectiveUtils = elementwiseProduct(agent.compositeWeights, achieved_prospectValues);
+		//// utilityRepu return the actualized utilities for each feature, having been logged and multiplied by the agent's weight on that feature.
+		//// i.e. CC return either ln(pot/2+1) or 0 depending on whether wb_money is 1 or 0, respectively.
+
+		//////////////
+		//// calculate counterfactuals ////
+		//////////////
+
+		// if the other player chose the other thing, holding a1 constant
+		var not_a2 = _.without( actions_player2, otherDecision );
+		var prob_not_a2 = {otherC: agent.p1_estimatedProb_of_p2_cooperate, otherD: 1-agent.p1_estimatedProb_of_p2_cooperate}[not_a2];
+		// var prob_not_a2 = 1;
+		var counterfact_a2_prospectValues = vectorScale( get_prospectValueRepu(agent, thisDecision, not_a2), prob_not_a2); // adjust absolute utilities by probability of occurrence
+		var counterfact_a2_subjectiveUtils = elementwiseProduct(agent.compositeWeights, counterfact_a2_prospectValues);
+
+		var not_a1 = _.without( actions_player1, thisDecision );
+		var prob_not_a1_unnormalized = map(function(x) { return Math.exp(agent.distra.score(x)); }, not_a1);
+		////////////
+		// This normalizes the counterfactual a1 by the compliment of P(a_1). Is useful when the softmax optimality parameter is high b/c the P(a_1) tends to be so high it floors P(CFa1).
+		// Especially useful when there are more than 2 possible a_1 values. When the choice is binary, the P(not a_1) simply becomes 1, which could still be desirable depending on the softmax parametrization
+		// Currently using unnormalized P(not a_1) in the calculation of counterfact_a1_prospectValues
+		////////////
+		var prob_not_a1 = normalize_probs(prob_not_a1_unnormalized);
+
+		var counterfact_a1_prospectValues = vectorScale( get_prospectValueRepu(agent, not_a1, otherDecision), prob_not_a1); // adjust absolute utilities by probability of occurrence
+		var counterfact_a1_subjectiveUtils = elementwiseProduct(agent.compositeWeights, counterfact_a1_prospectValues);
+
+		//////////////
+		//// repackage ////
+		//////////////
+
+		_.extend(agent, {
+			// compositeWeights: agent.compositeWeights, // agent's preferences/values for each of the base and reputation features
+			subjectiveUtilsExpected: expected_subjectiveUtilities, // agent's expected subjective utility for each b+r feature
+			absoluteUtilsProspectExpected: expected_prospectValues, // the prospect-scaled expected utilities assocaited with each b+r feature (independent of the agent's preferences)
+			subjectiveUtilsReal: achieved_subjectiveUtils, // agent's actualized utilities for b+r features
+			absoluteUtilsProspectReal: achieved_prospectValues, // the prospect-scaled actual utilities assocaited with each b+r feature (independent of the agent's preferences)
+			subjectiveCF_a2: counterfact_a2_subjectiveUtils,
+			absoluteCF_a2: counterfact_a2_prospectValues,
+			subjectiveCF_a1: counterfact_a1_subjectiveUtils,
+			absoluteCF_a1: counterfact_a1_prospectValues,
+			// otherMotivation: estimatedMotivationOther[{otherC:"C", otherD:"D"}[otherDecision]],
+			thisDecision: thisDecision,
+			otherDecision: otherDecision,
+			pot: pot });
+
+		var inferredAppraisalFeatures = recastIAF(agent);
+
+		_.extend(inferredAppraisalFeatures, { 
+			otherDecisionPElnpot: prospectScale( ({otherC: 1, otherD: 0}[otherDecision] - agent.p1_estimatedProb_of_p2_cooperate)*pot ),
+			otherDecisionPEpot: ({otherC: 1, otherD: 0}[otherDecision] - agent.p1_estimatedProb_of_p2_cooperate)*pot,
+			otherDecisionPEraw: ({otherC: 1, otherD: 0}[otherDecision] - agent.p1_estimatedProb_of_p2_cooperate),
+			otherDecisionPEunval: {otherC: 1-agent.p1_estimatedProb_of_p2_cooperate, otherD: agent.p1_estimatedProb_of_p2_cooperate}[otherDecision] 
+		});
+
+		var emotionIntensities = map(function(emotion) { return emotionFun(emotion, inferredAppraisalFeatures); }, emotions);
+
+		var scaledEmotionIntensities = map(sigmoidFun, emotionIntensities);
+
+		return {compositeWeights: _.flatten([agent.compositeWeights, agent.p1_estimatedProb_of_p2_cooperate]), emotionIntensities: scaledEmotionIntensities};
+	});
+};
+
+
+////////// Make Base-level Observations //////////
+
+if (paramin.m0.samples > 0) {
+
+	var observedBaseDecisionFrequency_a1 = Infer(paramin.m0, function() {
+		//// Get the decision frequency of the base model (private decision)
+		var baseAgentActionDist = observeBaseAgent();
+		return baseAgentActionDist.distra.MAP().val;
+	});
+
+
+	if (writeout) {
+		json.write(outputDir + 'level0_' + pot.toString().replace('.','c') + 'USD_' + paramin.m0.method + paramin.m0.samples + '_decisionFrequency.json', observedBaseDecisionFrequency_a1);
+	} else {
+		display('\n-------Level 0-------\n');
+		viz(observedBaseDecisionFrequency_a1);
+	}
+
+} //// if (nObservations[0] > 0)
+
+var GetObservationData_Level1 = function(nObs) {
+	//// The inferred weights of the base model (private decision), conditioned on observed decision
+	var Observations_Level1 = {};
+	var Observations_Level1_weights = {};
+	var otherDecisionExpectation_Base = {};
+	map(function(a1) {
+		_.set(Observations_Level1, a1, observeLevel0model(a1));
+		_.set(Observations_Level1_weights, a1, marginalize(Observations_Level1[a1], 'weights'));
+		_.set(otherDecisionExpectation_Base, a1, marginalize(Observations_Level1[a1], 'estimated_p2'));
+	}, actions_player1);
+
+	if (writeout) {
+		json.write(outputDir + 'level1_' + pot.toString().replace('.','c') + 'USD_' + paramin.m1.method + paramin.m1.samples + '_observedAgents.json', Observations_Level1);
+	} else {
+		map(function(a1) {
+			display('\n---Level 1: Player1 ' + a1 + '---\n');
+			if (nObs < 200) {
+				viz.auto(Observations_Level1_weights[a1]);
+			}
+			viz.marginals(Observations_Level1_weights[a1]);
+		},
+		actions_player1);
+		map(function(a1) {
+			display('\n---Level 1 (p1 estimate of p2): Player1 ' + a1 + '---\n');
+			viz.auto(otherDecisionExpectation_Base[a1]);
+			viz.marginals(otherDecisionExpectation_Base[a1]);
+		},
+		actions_player1);
+	}
+
+	return Observations_Level1_weights;
+};
+
+if (paramin.m1.samples > 0) {
+	globalStore.ObservationData_Level1 = GetObservationData_Level1(paramin.m1.samples);
+} //// if (nObservations[1] > 0)
+
+
+var expectedReputation_lvl1 = {};
+map(function(a1) {
+	_.set(expectedReputation_lvl1, a1,
+			map(function(feature) {return expectation(marginalize(globalStore.ObservationData_Level1[a1], feature.toString())); }, _.range(featuresBase.length))
+		);
+}, actions_player1);
+
+display('--Base agent expected values-- ');
+map( function(a1) { mapIndexed(function(idx,feature) {display('E[' + feature.label + '|' + a1 + '] =        ' + expectedReputation_lvl1[a1][idx]);}, featuresBase ); }, actions_player1);
+
+
+////////// Make Higher-level Observations //////////
+
+if (paramin.m2.samples > 0) {
+
+	var observedRepuDecisionFrequency_a1 = Infer(paramin.m2, function() {
+		//// Get the decision frequency of the level 2 model (public decision)
+		var reputationAgentActionDist = observeReputationAgent();
+		return reputationAgentActionDist.distra.MAP().val;
+
+	});
+
+	if (writeout) {
+		json.write(outputDir + 'level2_' + pot.toString().replace('.','c') + 'USD_' + paramin.m2.method + paramin.m2.samples + '_decisionFrequency.json', observedRepuDecisionFrequency_a1);
+	} else {
+		display('\n-------Level 2-------\n');
+		viz(observedRepuDecisionFrequency_a1);
+	}
+
+} //// if (nObservations[2] > 0)
+
+var GetObservationData_Level2 = function() {
+	//// The inferred weights of the base model (private decision), conditioned on observed decision
+	var Observations_Level3 = {};
+	var Observations_Level3_weights = {};
+	var otherDecisionExpectation_Repu = {};
+	map(function(a1) {
+		_.set(Observations_Level3, a1, observeLevel2model(a1));
+		_.set(Observations_Level3_weights, a1, marginalize(Observations_Level3[a1], 'weights'));
+		_.set(otherDecisionExpectation_Repu, a1, marginalize(Observations_Level3[a1], 'estimated_p2'));
+	}, actions_player1);
+
+	if (writeout) {
+		json.write(outputDir + 'level3_' + pot.toString().replace('.','c') + 'USD_' + paramin.m3.method + paramin.m3.samples + '_observedAgents.json', Observations_Level3);
+	} else {
+		map(
+			function(a1) {
+				display('-Observations_Level3 ' + a1 + '-');
+				viz.auto(Observations_Level3_weights[a1]);
+				display('marginals-Observations_Level3 ' + a1 + '-');
+				viz.marginals(Observations_Level3_weights[a1]);
+			},
+		actions_player1);
+		map(
+			function(a1) {
+				display('\n---Level 3 (p1 estimate of p2): Player1 ' + a1 + '---\n');
+				viz.auto(otherDecisionExpectation_Repu[a1]);
+				viz.marginals(otherDecisionExpectation_Repu[a1]);
+			},
+		actions_player1);
+	}
+
+	return Observations_Level3_weights;
+};
+
+
+if (paramin.m3.samples > 0) {
+
+	globalStore.ObservationData_Level2 = GetObservationData_Level2();
+
+} //// if (nObservations[3] > 0)
+
+var expectedMotivation_lvl3 = {};
+map(function(a1) {
+	_.set(expectedMotivation_lvl3, a1,
+			map(function(feature) {return expectation(marginalize(globalStore.ObservationData_Level2[a1], feature.toString())); }, _.range(_.flatten(combinedPreferencelabels).length))
+		);
+}, actions_player1);
+
+display('\n---Level 3: Player1---\n');
+map( function(a1) { mapIndexed(function(idx,feature) {display('E[' + feature + '|' + a1 + '] =        ' + expectedMotivation_lvl3[a1][idx]);}, _.flatten(combinedPreferencelabels) ); }, actions_player1);
+
+if (paramin.m4iaf.samples > 0) {
+
+	// return vector of weights, r, and vector of forward predictions of emotion intensity:  [r,I] = f_{e}( w_b, w_o, w_e, w_b', pot, d_{this}, d_{other} )
+	// each outcome observation (e.g. CC) here is a joint distribution of P(r,I|d_{this},d{other})
+	var modelObservation_lvl2_outcomeFeatures = {};
+	map(function(thisDecision) {
+		map(function(otherDecision) {
+			_.set(modelObservation_lvl2_outcomeFeatures, thisDecision+{otherC:"C", otherD:"D"}[otherDecision],
+				observeLevel2model_Emotions(paramin.m4iaf, thisDecision, otherDecision, outcomeFeatures, forwardSampleAppraisalFeature, checkForNaN)
+			);
+		}, actions_player2);
+	}, paramin.a1);
+
+	/*
+	var outcomeFeaturePosterior = {}
+	map(function(thisDecision) {
+		map(function(otherDecision) {
+			_.set(outcomeFeaturePosterior, thisDecision+{otherC:"C", otherD:"D"}[otherDecision],
+				Infer({method: 'enumerate', model: function() {return sample(modelObservation_lvl2_outcomeFeatures[thisDecision+{otherC:"C", otherD:"D"}[otherDecision]]).emotionIntensities;}})
+			)
+		}, actions_player2)
+	}, actions_player1);
+	*/
+
+	if (writeout) {
+		json.write(outputDir + 'level4IAF_' + pot.toString().replace('.','c') + 'USD_' + paramin.m4iaf.method + paramin.m4iaf.samples + '_modelObservation_outcomeFeatures.json', modelObservation_lvl2_outcomeFeatures);
+		// json.write(outputDir + 'level4IAF_' + pot.toString().replace('.','c') + 'USD_' + paramin.m4iaf.method + paramin.m4iaf.samples + '_outcomeFeatures.json', outcomeFeaturePosterior);
+	} 
+
+
+	display('\n---Level 4: Player1---\n');
+	display('\n=====\n');
+	display(map(function(feature) {return expectation(marginalize(marginalize(modelObservation_lvl2_outcomeFeatures['CC'], 'compositeWeights'), feature.toString())); }, _.range(_.flatten(combinedFeaturelabels).length)));
+	display(map(function(feature) {return expectation(marginalize(marginalize(modelObservation_lvl2_outcomeFeatures['DC'], 'compositeWeights'), feature.toString())); }, _.range(_.flatten(combinedFeaturelabels).length)));
+	display('\n')
+	display(map(function(feature) {return expectation(marginalize(marginalize(modelObservation_lvl2_outcomeFeatures['CD'], 'compositeWeights'), feature.toString())); }, _.range(_.flatten(combinedFeaturelabels).length)));
+	display(map(function(feature) {return expectation(marginalize(marginalize(modelObservation_lvl2_outcomeFeatures['DD'], 'compositeWeights'), feature.toString())); }, _.range(_.flatten(combinedFeaturelabels).length)));
+	display('\n=====\n');
+
+
+
+} //// if (nObservations[4] > 0)
+
+if (writeout) {
+	json.write(outputDir + 'log_' + pot.toString().replace('.','c') + 'USD_' + paramin.m4iaf.method + '.json', {numerical_errors: globalStore.numerical_errors});
+}
+if (globalStore.numerical_errors > 0) {
+	display('WARNING :: ' + globalStore.numerical_errors + ' NUMRICAL ERRORS OBSERVED.');
+}
+
+display('\nlights off\n');
+
+display('m1:    ' + 'max: ' + _.max(score_m1) + '   min: ' + _.min(score_m1) );
+display('m3:    ' + 'max: ' + _.max(score_m3) + '   min: ' + _.min(score_m3) );
+display('m4:    ' + 'max: ' + _.max(score_m4) + '   min: ' + _.min(score_m4) );

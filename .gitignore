@@ -1,0 +1,23 @@
+.DS_Store
+._.DS_Store
+*-gitignore*
+*_gitignore*
+# *-gitpubignore*
+# *_gitpubignore*
+
+### Files autocreated by Python ###
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+code/Untitled*.ipynb
+code/.ipynb_checkpoints
+
+### Project specific files ###
+datain/exp1-4
+dataOut/
+experiments/stimuli/
+
+### 
+docs/
+manuscript/
