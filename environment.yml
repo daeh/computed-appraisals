@@ -1,0 +1,22 @@
+### conda env create -f environment.yml
+name: envcam
+channels:
+  - pytorch
+  - conda-forge
+dependencies:
+  - python
+  - jupyterlab
+  - autopep8
+  - numpy
+  - pandas
+  - scipy
+  - scikit-learn
+  - dill
+  - seaborn
+  - pytorch::pytorch
+  - conda-lock
+  - pip
+platforms:
+  - osx-arm64
+  - linux-64
+

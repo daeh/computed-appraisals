@@ -1,0 +1,15 @@
+session_name: CAM-torch-kernel
+windows:
+- window_name: slurmout_cam_torch
+  layout: tiled
+  shell_command_before:
+    - print "loading..." # run as a first command in all panes
+  panes:
+    - shell_command:        # pane no. 1
+      - env_cam
+      - cd "${PROJCAMPATH}/code" || exit
+      - print "kernel_cam_head()"
+    - shell_command:           # pane no. 2
+      - print "running >> launchkernel_cam_torch_interactive() <<"
+      - launchkernel_cam_torch_interactive
+
