@@ -1,12 +1,12 @@
 # Emotion prediction as computation over a generative theory of mind
 
-![Generative Model of Computed Appraisals](website/caa_model_diagram.png)
+![Computed Appraisals Model](https://daeh.info/proj/houlihan2023computedappraisals/img/cam_summary.jpg)
 
 **ABSTRACT** From sparse descriptions of events, observers can make systematic and nuanced predictions of what emotions the people involved will experience. We propose a formal model of emotion prediction in the context of a public high-stakes social dilemma. This model uses inverse planning to infer a person's beliefs and preferences, including social preferences for equity and for maintaining a good reputation. The model then combines these inferred mental contents with the event to compute 'appraisals': whether the situation conformed to the expectations and fulfilled the preferences. We learn functions mapping computed appraisals to emotion labels, allowing the model to match human observers' quantitative predictions of twenty emotions, including joy, relief, guilt, and envy. Model comparison indicates that inferred monetary preferences are not sufficient to explain observers' emotion predictions; inferred social preferences are factored into predictions for nearly every emotion. Human observers and the model both use minimal individualizing information to adjust predictions of how different people will respond to the same event. Thus, our framework integrates inverse planning, event appraisals, and emotion concepts in a single computational model to reverse-engineer people's intuitive theory of emotions.
 
 ## Project information
 
-This work is described in the open access **[paper](https://royalsocietypublishing.org/doi/10.1098/rsta.2022.0047)** and **[supplement](https://royalsocietypublishing.org/doi/suppl/10.1098/rsta.2022.0047)**.
+This work is described in the open access **[paper](https://daeh.info/pubs/houlihan2023computedappraisals.pdf)**.
 
 The GitHub repository ([https://github.com/daeh/computed-appraisals](https://github.com/daeh/computed-appraisals)) provides all of the raw behavioral data, models, and analyses.
 

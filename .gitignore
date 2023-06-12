@@ -1,13 +1,9 @@
 code/Untitled*.ipynb
-# *-gitpubignore*
-# *_gitpubignore*
+.Rproj.user
 
 ### Project specific files ###
 datain/exp1-4
 dataOut/
 paradigms/stimuli/
 
-### 
-docs/
-manuscript/
-.Rproj.user
+

@@ -1,8 +1,6 @@
-# Emotion prediction as computation over a generative theory of mind
+# Empirical Data for *"Emotion prediction as computation over a generative theory of mind"*
 
-## Empirical Data
-
-This readme describes the empirical data used by the Computed Appraisals Model. For context, see the [paper](https://royalsocietypublishing.org/doi/10.1098/rsta.2022.0047), [supplement](https://royalsocietypublishing.org/doi/suppl/10.1098/rsta.2022.0047), and main GitHub repository: [https://github.com/daeh/computed-appraisals](https://github.com/daeh/computed-appraisals).
+This readme describes the empirical data used by the Computed Appraisals Model. For context, see the [paper](https://daeh.info/pubs/houlihan2023computedappraisals.pdf) and main GitHub repository: [https://github.com/daeh/computed-appraisals](https://github.com/daeh/computed-appraisals).
 
 Each subdirectory contains 4 files:
 
